@@ -1,0 +1,24 @@
+{
+  "name": "CPAverse TaxDome Monitor",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "taxdome-webhook",
+        "options": {
+          "responseMode": "onReceived",
+          "responseData": "allEntries"
+        }
+      },
+      "id": "taxdome-webhook",
+      "name": "TaxDome Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [250, 300],
+      "webhookId": "taxdome-webhook",
+      "notes": "Receives webhook notifications from TaxDome."
+    }
+  ],
+  "settings": {},
+  "note": "Full workflow is in n8n Cloud (ID: OgaHAAHFLRlpprAW). This is a reference copy."
+}
