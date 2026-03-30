@@ -33,16 +33,17 @@ Before importing workflows into n8n Cloud, you need these credentials configured
 ## Workflow 1: Morning Report
 
 **File:** `morning-report-workflow.json`
-**n8n Workflow ID:** `FkPhsXWowDd0pna2` (already imported)
+**n8n Workflow ID:** `FkPhsXWowDd0pna2` (imported and **ACTIVE**)
 
 ### What it does:
 1. Fires daily at 7:00 AM Central Time
 2. Reads the activity log from GitHub (cpaverse-agents/logs/daily-activity.md)
-3. Sends log content to Claude API to format the morning report
-4. Parses the report into subject line and HTML body
-5. Sends the report email to josh@joshmauercpa.com
-6. Archives the day's log to GitHub (logs/archive/YYYY-MM-DD.md)
-7. Resets the daily activity log for the new day
+3. Builds the Claude API request body via Code node
+4. Sends to Claude API to format the morning report
+5. Parses the report into subject line and HTML body
+6. Sends the report email to josh@joshmauercpa.com
+7. Archives the day's log to GitHub (logs/archive/YYYY-MM-DD.md)
+8. Resets the daily activity log for the new day
 
 ### Setup steps:
 1. In n8n, go to Settings > General > Timezone and set to **America/Chicago**
@@ -124,7 +125,9 @@ Set to `America/Chicago` in Settings > General
 - [x] GitHub repo `CPAverse/cpaverse-agents` created and all files pushed
 - [x] Morning Report workflow tested — **full end-to-end execution successful**
 - [x] TaxDome Monitor workflow credentials connected and `{GITHUB_OWNER}` replaced
-- [ ] Activate Morning Report workflow for daily 7am CT schedule
+- [x] Activate Morning Report workflow for daily 7am CT schedule — **ACTIVATED**
+- [x] Archive Log and Reset Daily Log nodes added to Morning Report workflow (8 nodes total)
+- [x] n8n timezone verified as America/Chicago (workflow-level setting)
 - [ ] Configure TaxDome webhook URL in TaxDome settings
 - [ ] Test TaxDome Monitor end-to-end
 
@@ -144,6 +147,8 @@ Set to `America/Chicago` in Settings > General
 4. Claude API - Format Report (HTTP Request → Anthropic API)
 5. Parse Report (Code — extracts subject and HTML body)
 6. Send Morning Report Email (Gmail → josh@joshmauercpa.com)
+7. Archive Log to GitHub (HTTP Request → GitHub API — runs in parallel with #6)
+8. Reset Daily Log (HTTP Request → GitHub API — runs after #7)
 
 ## Testing Checklist
 
@@ -151,7 +156,7 @@ Set to `America/Chicago` in Settings > General
 - [x] Morning Report workflow imported and credentials connected
 - [x] Morning Report test execution sends email successfully
 - [x] TaxDome Monitor workflow imported and credentials connected
-- [ ] n8n timezone verified as America/Chicago
+- [x] n8n timezone verified as America/Chicago
 - [ ] TaxDome webhook URL configured in TaxDome settings
 - [ ] Test document upload triggers the monitor workflow
 - [ ] Urgent alert email sends correctly on Return Rejected test
