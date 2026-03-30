@@ -1,0 +1,111 @@
+{
+  "firm": {
+    "name": "Josh Mauer CPA LLC",
+    "timezone": "America/Chicago",
+    "owner": "Josh Mauer, CPA"
+  },
+  "staff": {
+    "josh": {
+      "name": "Josh Mauer",
+      "role": "Owner / CPA / Lead Reviewer",
+      "email": "josh@joshmauercpa.com",
+      "calendar_id": "josh@joshmauercpa.com",
+      "receives_morning_report": true
+    },
+    "rita": {
+      "name": "Rita",
+      "role": "Client Coordinator",
+      "email": "info@joshmauercpa.com",
+      "calendar_id": "info@joshmauercpa.com",
+      "owns_client_communication": true
+    },
+    "adam": {
+      "name": "Adam",
+      "role": "Tax Preparer",
+      "email": "adam@joshmauercpa.com",
+      "calendar_id": "adam@joshmauercpa.com"
+    },
+    "sarah": {
+      "name": "Sarah",
+      "role": "Tax Preparer",
+      "email": "sarah@joshmauercpa.com",
+      "calendar_id": "sarah@joshmauercpa.com"
+    },
+    "jc": {
+      "name": "JC Presley",
+      "role": "Accounting",
+      "email": "accounting@joshmauercpa.com",
+      "calendar_id": "accounting@joshmauercpa.com"
+    },
+    "amara": {
+      "name": "Amara",
+      "role": "Staff",
+      "email": "amara@joshmauercpa.com",
+      "calendar_id": "amara@joshmauercpa.com"
+    },
+    "suparat": {
+      "name": "Suparat",
+      "role": "Staff",
+      "email": "suparat@joshmauercpa.com",
+      "calendar_id": "suparat@joshmauercpa.com"
+    }
+  },
+  "systems": {
+    "taxdome": {
+      "url": "https://app.taxdome.com",
+      "pipelines": {
+        "1040": {
+          "stages": [
+            "2025 Planning",
+            "In Prep",
+            "Review (Optional - Manager)",
+            "Preparer Follow-Up",
+            "Waiting for E-sign",
+            "E-filing",
+            "Return Rejected",
+            "Return Accepted or Mailed"
+          ]
+        },
+        "biz": {
+          "stages": [
+            "TBD — to be documented in future phase"
+          ]
+        }
+      }
+    },
+    "drake": {
+      "version": "Drake Tax 2025",
+      "access": "AWS WorkSpace via Firecrawl",
+      "workspace_url": "us-east-1.webclient.amazonworkspaces.com/wsp.html"
+    },
+    "firecrawl": {
+      "plan": "Hobby",
+      "credits_per_month": 3000,
+      "api_key_prefix": "fc-51ee2",
+      "api_base": "https://api.firecrawl.dev/v1"
+    },
+    "github": {
+      "repo": "cpaverse-agents",
+      "log_path": "logs/daily-activity.md",
+      "archive_path": "logs/archive/"
+    }
+  },
+  "agent_rules": {
+    "never_file_returns": true,
+    "never_send_client_messages_without_auth": true,
+    "flag_when_in_doubt": true,
+    "log_every_action": true,
+    "client_data_stays_internal": true,
+    "lead_preparer_approves_non_standard": true,
+    "maintain_client_state": true,
+    "learn_dont_script": true
+  },
+  "morning_report": {
+    "schedule": "0 7 * * *",
+    "timezone": "America/Chicago",
+    "recipient": "josh@joshmauercpa.com",
+    "subject_template": "CPAverse Agent Report — {date} — {action_count} Actions Completed"
+  },
+  "tax_year": "2025",
+  "deadline": "2026-04-15"
+}
