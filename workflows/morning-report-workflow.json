@@ -1,0 +1,25 @@
+{
+  "name": "CPAverse Morning Report",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "triggerAtHour": 7,
+              "triggerAtMinute": 0
+            }
+          ]
+        }
+      },
+      "id": "schedule-trigger",
+      "name": "Daily 7am CT Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [250, 300],
+      "notes": "Fires daily at 7:00 AM. Set n8n instance timezone to America/Chicago."
+    }
+  ],
+  "settings": {},
+  "note": "See full workflow in n8n Cloud (ID: FkPhsXWowDd0pna2)"
+}
