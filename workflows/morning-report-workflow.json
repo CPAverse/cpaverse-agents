@@ -16,13 +16,16 @@
       "name": "Daily 7am CT Trigger",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.2,
-      "position": [250, 300],
+      "position": [
+        130,
+        300
+      ],
       "notes": "Fires daily at 7:00 AM. Set n8n instance timezone to America/Chicago."
     },
     {
       "parameters": {
         "method": "GET",
-        "url": "https://api.github.com/repos/{GITHUB_OWNER}/cpaverse-agents/contents/logs/daily-activity.md",
+        "url": "https://api.github.com/repos/CPAverse/cpaverse-agents/contents/logs/daily-activity.md",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpHeaderAuth",
         "sendHeaders": true,
@@ -40,20 +43,240 @@
       "name": "Read Activity Log from GitHub",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [470, 300],
-      "notes": "Reads the daily activity log from GitHub. Uses GitHub PAT for auth. Replace {GITHUB_OWNER} with your GitHub username."
+      "position": [
+        350,
+        300
+      ],
+      "notes": "Reads the daily activity log from GitHub. Uses GitHub PAT for auth."
     },
     {
-      "parameters": {},
+      "parameters": {
+        "jsCode": "const logData = $input.first().json.data || 'No activity log data available.';\nconst today = new Date();\nconst apr15 = new Date('2026-04-15');\nconst daysLeft = Math.ceil((apr15 - today) / 86400000);\nconst dateStr = today.toLocaleDateString('en-US', {month: 'long', day: 'numeric', year: 'numeric'});\nconst prompt = `You are the CPAverse Tax Prep Agent for Josh Mauer CPA LLC. Generate a morning report email.\\n\\nToday's date: ${dateStr}\\nDays until April 15, 2026: ${daysLeft}\\n\\nActivity Log Contents:\\n${logData}\\n\\nFormat the report with sections: SUBJECT, COMPLETED SINCE LAST REPORT, NEEDS YOUR ATTENTION - URGENT, WAITING ON CLIENTS, DEADLINE WATCH, AGENT ACTIVITY SUMMARY. Return ONLY the formatted report.`;\nreturn [{ json: { requestBody: { model: 'claude-sonnet-4-6', max_tokens: 2048, messages: [{ role: 'user', content: prompt }] } } }];"
+      },
+      "id": "build-claude-request",
+      "name": "Build Claude Request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        570,
+        300
+      ],
+      "notes": "Constructs Claude API request body in JavaScript to avoid n8n expression parsing issues."
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "anthropic-version",
+              "value": "2023-06-01"
+            },
+            {
+              "name": "content-type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.requestBody) }}",
+        "options": {}
+      },
       "id": "claude-format-report",
-      "name": "Claude API — Format Report",
+      "name": "Claude API - Format Report",
       "type": "n8n-nodes-base.httpRequest",
-      "note": "See full node in n8n Cloud (ID: FkPhsXWowDd0pna2)"
+      "typeVersion": 4.2,
+      "position": [
+        790,
+        300
+      ],
+      "notes": "Sends activity log to Claude API. x-api-key provided by HTTP Header Auth credential."
+    },
+    {
+      "parameters": {
+        "jsCode": "const response = $input.first().json;\nconst reportText = response.content[0].text;\nconst lines = reportText.split('\\n');\nlet subject = 'CPAverse Agent Report';\nlet body = reportText;\nfor (const line of lines) {\n  if (line.startsWith('SUBJECT:')) {\n    subject = line.replace('SUBJECT:', '').trim();\n    body = reportText.substring(reportText.indexOf('\\n', reportText.indexOf('SUBJECT:')) + 1);\n    break;\n  }\n}\nconst htmlBody = `<html><body><pre style=\"font-family: 'Courier New', monospace; font-size: 14px; line-height: 1.5; color: #1a365d;\">${body}</pre></body></html>`;\nreturn [{ json: { subject, body: htmlBody, plainBody: body } }];"
+      },
+      "id": "parse-report",
+      "name": "Parse Report",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1010,
+        300
+      ],
+      "notes": "Extracts subject line and formats body as HTML for email."
+    },
+    {
+      "parameters": {
+        "sendTo": "josh@joshmauercpa.com",
+        "subject": "={{ $json.subject }}",
+        "emailType": "html",
+        "message": "={{ $json.body }}",
+        "options": {}
+      },
+      "id": "send-email",
+      "name": "Send Morning Report Email",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        1230,
+        300
+      ],
+      "notes": "Sends morning report to josh@joshmauercpa.com."
+    },
+    {
+      "parameters": {
+        "method": "PUT",
+        "url": "=https://api.github.com/repos/CPAverse/cpaverse-agents/contents/logs/archive/{{ $now.format('yyyy-MM-dd') }}.md",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Accept",
+              "value": "application/vnd.github.v3+json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ message: 'Archive activity log for ' + $now.format('yyyy-MM-dd'), content: Buffer.from($('Read Activity Log from GitHub').first().json.data || '# No activity').toString('base64') }) }}",
+        "options": {}
+      },
+      "id": "archive-log",
+      "name": "Archive Log to GitHub",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1230,
+        500
+      ],
+      "notes": "Archives activity log to logs/archive/YYYY-MM-DD.md."
+    },
+    {
+      "parameters": {
+        "method": "PUT",
+        "url": "https://api.github.com/repos/CPAverse/cpaverse-agents/contents/logs/daily-activity.md",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Accept",
+              "value": "application/vnd.github.v3+json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ message: 'Reset daily activity log — ' + $now.format('yyyy-MM-dd'), content: Buffer.from('# CPAverse Agent Daily Activity Log\\n\\n| Timestamp | Client Name | Action Taken | Documents Processed | Flags | Status |\\n|-----------|------------|--------------|-------------------|-------|--------|\\n').toString('base64'), sha: $('Read Activity Log from GitHub').first().json.sha }) }}",
+        "options": {}
+      },
+      "id": "reset-log",
+      "name": "Reset Daily Log",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1450,
+        500
+      ],
+      "notes": "Resets activity log to fresh table after archiving."
     }
   ],
+  "connections": {
+    "Daily 7am CT Trigger": {
+      "main": [
+        [
+          {
+            "node": "Read Activity Log from GitHub",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Activity Log from GitHub": {
+      "main": [
+        [
+          {
+            "node": "Build Claude Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Claude Request": {
+      "main": [
+        [
+          {
+            "node": "Claude API - Format Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claude API - Format Report": {
+      "main": [
+        [
+          {
+            "node": "Parse Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Report": {
+      "main": [
+        [
+          {
+            "node": "Send Morning Report Email",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Archive Log to GitHub",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Archive Log to GitHub": {
+      "main": [
+        [
+          {
+            "node": "Reset Daily Log",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
   "settings": {
     "executionOrder": "v1",
     "timezone": "America/Chicago"
   },
-  "note": "Full workflow is in n8n Cloud (ID: FkPhsXWowDd0pna2). This file is a reference copy."
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "cpaverse-agents"
+  },
+  "tags": [
+    {
+      "name": "CPAverse"
+    },
+    {
+      "name": "Morning Report"
+    }
+  ]
 }
