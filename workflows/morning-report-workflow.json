@@ -18,8 +18,42 @@
       "typeVersion": 1.2,
       "position": [250, 300],
       "notes": "Fires daily at 7:00 AM. Set n8n instance timezone to America/Chicago."
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://api.github.com/repos/{GITHUB_OWNER}/cpaverse-agents/contents/logs/daily-activity.md",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Accept",
+              "value": "application/vnd.github.v3.raw"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "read-activity-log",
+      "name": "Read Activity Log from GitHub",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [470, 300],
+      "notes": "Reads the daily activity log from GitHub. Uses GitHub PAT for auth. Replace {GITHUB_OWNER} with your GitHub username."
+    },
+    {
+      "parameters": {},
+      "id": "claude-format-report",
+      "name": "Claude API — Format Report",
+      "type": "n8n-nodes-base.httpRequest",
+      "note": "See full node in n8n Cloud (ID: FkPhsXWowDd0pna2)"
     }
   ],
-  "settings": {},
-  "note": "See full workflow in n8n Cloud (ID: FkPhsXWowDd0pna2)"
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "America/Chicago"
+  },
+  "note": "Full workflow is in n8n Cloud (ID: FkPhsXWowDd0pna2). This file is a reference copy."
 }
