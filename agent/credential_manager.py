@@ -16,6 +16,10 @@ SECURITY: This module handles sensitive credentials.
 
 import os
 import json
+import hmac
+import hashlib
+import struct
+import base64
 import secrets
 import string
 import time
@@ -26,7 +30,7 @@ try:
     import pyotp
 except ImportError:
     pyotp = None
-    print("WARNING: pyotp not installed. Run: pip install pyotp")
+    # Fallback: we use built-in hmac/hashlib for TOTP generation
 
 try:
     import requests
@@ -47,8 +51,8 @@ class CredentialManager:
             "google_chat_webhook": "https://chat.googleapis.com/v1/spaces/...",
             "systems": {
                 "taxdome": {
-                    "username": "...",
-                    "totp_secret": "...",  # Base32 TOTP secret from authenticator setup
+                    "username": "admin@joshmauercpa.com",  # CPAverse Tax Agent seat
+                    "totp_secret": "...",  # Base32 TOTP secret (env: TAXDOME_TOTP_SECRET)
                     "login_url": "https://app.taxdome.com/login",
                     "password_rotation_days": null  # TaxDome doesn't force rotation
                 },
@@ -131,16 +135,25 @@ class CredentialManager:
             6-digit TOTP code string, or None if not configured.
 
         SECURITY: Code is generated in memory only, never logged or stored.
+        Uses pyotp if available, otherwise falls back to built-in hmac/hashlib.
         """
-        if pyotp is None:
-            raise RuntimeError("pyotp is required for TOTP generation")
-
         system = self.config["systems"].get(system_name)
         if not system or not system.get("totp_secret"):
             return None
 
-        totp = pyotp.TOTP(system["totp_secret"])
-        return totp.now()
+        if pyotp is not None:
+            totp = pyotp.TOTP(system["totp_secret"])
+            return totp.now()
+
+        # Fallback: generate TOTP using built-in libraries (no pyotp needed)
+        secret = system["totp_secret"]
+        key = base64.b32decode(secret)
+        counter = int(time.time()) // 30
+        msg = struct.pack(">Q", counter)
+        h = hmac.new(key, msg, hashlib.sha1).digest()
+        offset = h[-1] & 0x0F
+        code = struct.unpack(">I", h[offset:offset + 4])[0] & 0x7FFFFFFF
+        return f"{code % 1000000:06d}"
 
     def get_totp_time_remaining(self, system_name: str) -> int:
         """
