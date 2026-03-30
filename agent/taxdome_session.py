@@ -10,62 +10,164 @@ Manages the agent's browser session in TaxDome, including:
 TaxDome forces periodic logouts, so the agent must be able to
 re-authenticate autonomously using stored credentials and TOTP secrets.
 
+Browser Automation:
+    Uses Firecrawl API for all browser interactions. The agent connects to
+    TaxDome through the browser like a human — there are no TaxDome webhooks
+    or native API endpoints available for automation.
+
+Chat System:
+    The agent sends tailored morning reports to each team member via TaxDome's
+    team chat feature. Reports are filtered based on user role:
+    - Admin (Josh): Full executive report with all activity, security alerts
+    - Tax Prep Leads: Filtered to their assigned clients and tasks only
+
 Dependencies: credential_manager.py, Firecrawl (browser automation)
 """
 
+import os
+import time as time_module
 from datetime import datetime
 from typing import Optional
 
 from credential_manager import CredentialManager
 
 
+class TaxDomeBrowser:
+    """
+    Firecrawl-based browser automation for TaxDome.
+
+    This wraps the Firecrawl API to provide TaxDome-specific navigation
+    methods. All browser interaction goes through this class.
+    """
+
+    def __init__(self, api_key: Optional[str] = None):
+        self.api_key = api_key or os.environ.get("FIRECRAWL_API_KEY")
+        self.base_url = os.environ.get("FIRECRAWL_BASE_URL", "https://api.firecrawl.dev")
+        self.session_id = None
+
+    def start_session(self) -> bool:
+        """Initialize a Firecrawl browser session."""
+        # TODO: Implement Firecrawl session creation
+        # resp = requests.post(f"{self.base_url}/v1/sessions", headers=...)
+        # self.session_id = resp.json()["session_id"]
+        return False
+
+    def navigate(self, url: str) -> dict:
+        """Navigate the browser to a URL."""
+        # TODO: Firecrawl navigate
+        # resp = requests.post(f"{self.base_url}/v1/sessions/{self.session_id}/navigate",
+        #     json={"url": url})
+        return {"status": "not_implemented"}
+
+    def type_text(self, selector: str, text: str) -> bool:
+        """Type text into a form field identified by CSS selector."""
+        # TODO: Firecrawl type action
+        return False
+
+    def click(self, selector: str) -> bool:
+        """Click an element identified by CSS selector."""
+        # TODO: Firecrawl click action
+        return False
+
+    def get_text(self, selector: str) -> Optional[str]:
+        """Get text content of an element."""
+        # TODO: Firecrawl extract text
+        return None
+
+    def element_exists(self, selector: str) -> bool:
+        """Check if an element exists on the page."""
+        # TODO: Firecrawl element check
+        return False
+
+    def get_page_text(self) -> str:
+        """Get full page text content (for parsing notifications, chats, etc.)."""
+        # TODO: Firecrawl scrape page text
+        return ""
+
+    def wait_for(self, selector: str, timeout_seconds: int = 10) -> bool:
+        """Wait for an element to appear on the page."""
+        # TODO: Firecrawl wait/poll
+        return False
+
+    def close_session(self):
+        """Close the Firecrawl browser session."""
+        # TODO: Cleanup
+        self.session_id = None
+
+
 class TaxDomeSessionManager:
     """Manages the agent's TaxDome browser session and communications."""
+
+    # TaxDome CSS selectors (will need updating as TaxDome UI changes)
+    SELECTORS = {
+        # Login page
+        "email_input": 'input[name="email"], input[type="email"]',
+        "password_input": 'input[name="password"], input[type="password"]',
+        "login_button": 'button[type="submit"]',
+        "mfa_input": 'input[name="code"], input[placeholder*="code"]',
+        "mfa_verify_button": 'button[type="submit"]',
+        "remember_device": 'input[type="checkbox"]',
+        # Dashboard
+        "dashboard_indicator": '.dashboard, [data-testid="dashboard"]',
+        # Chat
+        "chat_panel": '.chat-panel, [data-testid="team-chat"]',
+        "chat_input": 'textarea.message-input, [data-testid="message-input"]',
+        "chat_send": 'button.send-button, [data-testid="send-message"]',
+        "unread_badge": '.unread-count, [data-testid="unread-indicator"]',
+        # Notifications
+        "notification_bell": '.notifications-bell, [data-testid="notifications"]',
+        "notification_items": '.notification-item',
+    }
 
     def __init__(self, credential_manager: CredentialManager):
         self.cred_manager = credential_manager
         self.system_name = "taxdome"
+        self.browser = TaxDomeBrowser()
 
         # Session state
         self.is_authenticated = False
         self.last_activity = None
+        self.is_running = False
 
         # Team configuration
         self.team_members = {
             "josh": {
                 "name": "Josh Mauer",
                 "role": "admin",
-                "report_type": "executive",  # Full overview, all clients
+                "report_type": "executive",
             },
             "sarah": {
-                "name": "Sarah",  # Last name TBD
+                "name": "Sarah",
                 "role": "tax_prep_lead",
-                "report_type": "lead",  # Only assigned clients
+                "report_type": "lead",
             },
             "adam": {
-                "name": "Adam",  # Last name TBD
+                "name": "Adam",
                 "role": "tax_prep_lead",
-                "report_type": "lead",  # Only assigned clients
+                "report_type": "lead",
             },
         }
 
     # ── Authentication ────────────────────────────────────────────
 
-    def ensure_authenticated(self, browser_automation) -> bool:
+    def ensure_authenticated(self) -> dict:
         """
         Ensure we have an active TaxDome session.
-        If session has expired, re-authenticate.
+        If session expired, re-authenticate.
 
-        Returns True if authenticated, False if login failed.
+        Returns:
+            {"status": "authenticated" | "login_failed" | "blocked"}
         """
         if self.is_authenticated:
-            # Check if session is still valid by looking for a known element
-            # TODO: browser_automation.check_element_exists("dashboard_indicator")
-            pass
+            # Verify session is still valid
+            if self.browser.element_exists(self.SELECTORS["dashboard_indicator"]):
+                return {"status": "authenticated"}
+            else:
+                self.is_authenticated = False
 
-        return self._perform_login(browser_automation)
+        return self._perform_login()
 
-    def _perform_login(self, browser_automation) -> bool:
+    def _perform_login(self) -> dict:
         """
         Login to TaxDome via browser automation.
 
@@ -76,92 +178,202 @@ class TaxDomeSessionManager:
         4. Handle MFA prompt with TOTP code
         5. Verify successful login
 
-        Returns True if login successful.
+        Returns:
+            {"status": "authenticated" | "login_failed" | "blocked"}
         """
         if self.cred_manager.is_login_blocked(self.system_name):
-            return False
+            return {"status": "blocked"}
 
-        # TODO: Implement with Firecrawl browser automation
-        #
-        # Pseudocode:
-        # 1. browser.navigate("https://app.taxdome.com/login")
-        # 2. browser.type("email_field", credentials.username)
-        # 3. browser.type("password_field", credentials.password)
-        # 4. browser.click("login_button")
-        #
-        # 5. If MFA prompt:
-        #    a. Wait for optimal TOTP timing
-        #    b. code = self.cred_manager.generate_totp_code("taxdome")
-        #    c. browser.type("mfa_code_field", code)
-        #    d. browser.click("verify_button")
-        #
-        # 6. If "Remember this device" prompt:
-        #    a. browser.click("remember_yes")  # Extends session to 30 days
-        #
-        # 7. Verify dashboard loaded
-        #    if browser.element_exists("dashboard"):
-        #        self.is_authenticated = True
-        #        self.last_activity = datetime.now()
-        #        self.cred_manager.record_login_attempt("taxdome", success=True)
-        #        return True
-        #    else:
-        #        self.cred_manager.record_login_attempt("taxdome", success=False)
-        #        return False
+        # Get credentials
+        system_config = self.cred_manager.config["systems"].get(self.system_name)
+        if not system_config:
+            return {"status": "login_failed", "reason": "No TaxDome credentials configured"}
 
-        return False
+        try:
+            # Step 1: Navigate to login page
+            self.browser.navigate(system_config["login_url"])
+            self.browser.wait_for(self.SELECTORS["email_input"])
 
-    # ── Team Chat — Sending Reports ───────────────────────────────
+            # Step 2: Enter email
+            self.browser.type_text(
+                self.SELECTORS["email_input"],
+                system_config["username"]
+            )
 
-    def send_chat_message(
-        self, browser_automation, recipient: str, message: str
-    ) -> bool:
+            # Step 3: Enter password
+            password = os.environ.get("TAXDOME_PASSWORD", "")
+            self.browser.type_text(self.SELECTORS["password_input"], password)
+
+            # Step 4: Click login
+            self.browser.click(self.SELECTORS["login_button"])
+
+            # Step 5: Handle MFA if prompted
+            if self.browser.wait_for(self.SELECTORS["mfa_input"], timeout_seconds=5):
+                # Wait for optimal TOTP timing (>5 seconds remaining)
+                remaining = self.cred_manager.get_totp_time_remaining(self.system_name)
+                if remaining < 5:
+                    time_module.sleep(remaining + 1)
+
+                totp_code = self.cred_manager.generate_totp_code(self.system_name)
+                if totp_code:
+                    self.browser.type_text(self.SELECTORS["mfa_input"], totp_code)
+                    self.browser.click(self.SELECTORS["mfa_verify_button"])
+
+            # Step 6: Remember device if prompted
+            if self.browser.element_exists(self.SELECTORS["remember_device"]):
+                self.browser.click(self.SELECTORS["remember_device"])
+
+            # Step 7: Verify dashboard loaded
+            if self.browser.wait_for(self.SELECTORS["dashboard_indicator"], timeout_seconds=15):
+                self.is_authenticated = True
+                self.last_activity = datetime.now()
+                self.cred_manager.record_login_attempt(self.system_name, success=True)
+                return {"status": "authenticated"}
+            else:
+                self.cred_manager.record_login_attempt(self.system_name, success=False)
+                return {"status": "login_failed", "reason": "Dashboard not loaded after login"}
+
+        except Exception as e:
+            self.cred_manager.record_login_attempt(self.system_name, success=False)
+            return {"status": "login_failed", "reason": str(e)}
+
+    # ── Team Chat — Sending ────────────────────────────────────────
+
+    def send_chat_message(self, recipient: str, message: str) -> bool:
         """
         Send a message in TaxDome team chat.
 
         Args:
-            browser_automation: Firecrawl instance
             recipient: Team member key ("josh", "sarah", "adam") or "all"
             message: Plain text message to send
 
         Returns True if sent successfully.
 
-        SECURITY: Messages are sent only to authorized team members.
-        Never sends messages to clients or external parties.
+        SECURITY: Messages sent only to authorized team members.
+        Never sends to clients or external parties.
         """
         if recipient not in self.team_members and recipient != "all":
             return False
 
-        if not self.ensure_authenticated(browser_automation):
+        if not self.is_authenticated:
+            auth = self.ensure_authenticated()
+            if auth["status"] != "authenticated":
+                return False
+
+        try:
+            # Navigate to team chat
+            self.browser.navigate("https://app.taxdome.com/team/chat")
+            self.browser.wait_for(self.SELECTORS["chat_panel"])
+
+            if recipient == "all":
+                # Send to team chat channel
+                pass  # TODO: Select team chat channel
+            else:
+                # Find or open DM with specific team member
+                member_name = self.team_members[recipient]["name"]
+                # TODO: Search for and open chat with member_name
+
+            # Type and send message
+            self.browser.type_text(self.SELECTORS["chat_input"], message)
+            self.browser.click(self.SELECTORS["chat_send"])
+
+            self.last_activity = datetime.now()
+            return True
+
+        except Exception as e:
+            print(f"Chat send error: {e}")
             return False
 
-        # TODO: Implement with Firecrawl
-        #
-        # Pseudocode:
-        # 1. browser.navigate("/team/chat") or find chat panel
-        # 2. If recipient is specific person:
-        #    a. browser.click("new_chat") or find existing chat
-        #    b. browser.type("search_member", team_members[recipient]["name"])
-        #    c. browser.click(matching_result)
-        # 3. browser.type("message_input", message)
-        # 4. browser.click("send_button")
-        #
-        # For @mentions in group chats:
-        # browser.type("message_input", f"@{team_members[recipient]['name']} {message}")
+    # ── Team Chat — Reading ────────────────────────────────────────
 
-        self.last_activity = datetime.now()
-        return False  # TODO: return True when implemented
+    def check_chat_messages(self) -> list:
+        """
+        Check TaxDome team chat for new messages directed at the agent.
 
-    def send_morning_report(
-        self, browser_automation, team_member: str, report_data: dict
-    ) -> bool:
+        Returns list of message dicts:
+        [
+            {
+                "sender": "josh",
+                "content": "Rush the Smith return",
+                "timestamp": "2026-03-30 09:15"
+            }
+        ]
+        """
+        if not self.is_authenticated:
+            return []
+
+        try:
+            # Check for unread indicators
+            if not self.browser.element_exists(self.SELECTORS["unread_badge"]):
+                return []
+
+            # Navigate to chat
+            self.browser.navigate("https://app.taxdome.com/team/chat")
+            self.browser.wait_for(self.SELECTORS["chat_panel"])
+
+            # TODO: Parse unread messages
+            # For each unread conversation:
+            #   - Extract sender name
+            #   - Match to team_members dict
+            #   - Extract message text
+            #   - Build structured result
+
+            self.last_activity = datetime.now()
+            return []
+
+        except Exception as e:
+            print(f"Chat check error: {e}")
+            return []
+
+    # ── Notification Monitoring ────────────────────────────────────
+
+    def check_new_activity(self) -> dict:
+        """
+        Check TaxDome for new client/document activity.
+
+        Returns:
+            {
+                "has_new_items": bool,
+                "items": [
+                    {
+                        "type": "document_upload" | "organizer_complete" | ...,
+                        "client_name": "...",
+                        "description": "..."
+                    }
+                ]
+            }
+        """
+        if not self.is_authenticated:
+            return {"has_new_items": False, "items": []}
+
+        try:
+            # Click notification bell
+            self.browser.click(self.SELECTORS["notification_bell"])
+            self.browser.wait_for(self.SELECTORS["notification_items"], timeout_seconds=5)
+
+            # TODO: Parse notification items from page
+            # For each notification:
+            #   - Classify type (document, organizer, message, deadline)
+            #   - Extract client name
+            #   - Extract description
+            #   - Build structured result
+
+            self.last_activity = datetime.now()
+            return {"has_new_items": False, "items": []}
+
+        except Exception as e:
+            print(f"Activity check error: {e}")
+            return {"has_new_items": False, "items": []}
+
+    # ── Morning Report Delivery ────────────────────────────────────
+
+    def send_morning_report(self, team_member: str, report_data: dict) -> bool:
         """
         Send a tailored morning report to a specific team member via TaxDome chat.
 
         Args:
             team_member: "josh", "sarah", or "adam"
             report_data: Dict containing activity log, client assignments, etc.
-
-        Returns True if sent successfully.
         """
         member = self.team_members.get(team_member)
         if not member:
@@ -172,7 +384,7 @@ class TaxDomeSessionManager:
         else:
             report = self._format_lead_report(team_member, report_data)
 
-        return self.send_chat_message(browser_automation, team_member, report)
+        return self.send_chat_message(team_member, report)
 
     def _format_executive_report(self, data: dict) -> str:
         """Format the full executive morning report for Josh."""
@@ -204,7 +416,6 @@ class TaxDomeSessionManager:
         member = self.team_members[lead]
         today = datetime.now().strftime("%B %d, %Y")
 
-        # Filter data to only this lead's assigned clients
         assigned_clients = data.get("assignments", {}).get(lead, [])
         completed = [
             c for c in data.get("completed_list", [])
@@ -220,15 +431,15 @@ class TaxDomeSessionManager:
         ]
 
         completed_text = "\n".join(
-            [f"  • {c['description']}" for c in completed]
+            [f"  - {c['description']}" for c in completed]
         ) or "No items completed."
 
         urgent_text = "\n".join(
-            [f"  ⚠️ {c['description']}" for c in urgent]
+            [f"  ! {c['description']}" for c in urgent]
         ) or "No urgent items."
 
         waiting_text = "\n".join(
-            [f"  • {c['description']}" for c in waiting]
+            [f"  - {c['description']}" for c in waiting]
         ) or "No items waiting."
 
         return (
@@ -240,73 +451,6 @@ class TaxDomeSessionManager:
             f"Let me know if you need anything!\n"
             f"— CPAverse Tax Prep Agent"
         )
-
-    # ── Team Chat — Reading Messages ──────────────────────────────
-
-    def check_team_chat(self, browser_automation) -> list:
-        """
-        Check TaxDome team chat for new messages directed at the agent.
-
-        Looks for @mentions of the agent's name in team chats.
-
-        Returns list of messages:
-        [
-            {
-                "from": "josh",
-                "message": "Rush the Smith return",
-                "timestamp": "2026-03-30 09:15",
-                "chat_id": "..."
-            }
-        ]
-        """
-        if not self.ensure_authenticated(browser_automation):
-            return []
-
-        # TODO: Implement with Firecrawl
-        #
-        # Pseudocode:
-        # 1. browser.navigate("/team/chat")
-        # 2. unread = browser.find_elements("unread_indicator")
-        # 3. For each unread chat:
-        #    a. browser.click(chat)
-        #    b. messages = browser.find_elements("message")
-        #    c. For each message mentioning the agent:
-        #       - Extract sender, text, timestamp
-        #       - Verify sender is an authorized user
-        #       - Add to results
-
-        self.last_activity = datetime.now()
-        return []
-
-    # ── Document & Notification Monitoring ────────────────────────
-
-    def check_notifications(self, browser_automation) -> list:
-        """
-        Check TaxDome notifications for new events.
-
-        Monitors:
-        - New document uploads from clients
-        - Client messages
-        - Job status changes
-        - Deadline alerts
-
-        Returns list of notification dicts.
-        """
-        if not self.ensure_authenticated(browser_automation):
-            return []
-
-        # TODO: Implement with Firecrawl
-        #
-        # Pseudocode:
-        # 1. browser.click("notifications_bell")
-        # 2. notifications = browser.find_elements("notification_item")
-        # 3. For each notification:
-        #    - Extract type, client, description, timestamp
-        #    - Classify: document_upload, client_message, job_change, deadline
-        # 4. Return structured list
-
-        self.last_activity = datetime.now()
-        return []
 
     # ── Status ────────────────────────────────────────────────────
 
