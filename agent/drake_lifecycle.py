@@ -19,12 +19,36 @@ Multi-Year Support:
     Each year has its own TOTP/MFA code but shares the same password.
     Starting with 2025 only, but designed to scale.
 
+File Access:
+    The AWS WorkSpace has virtual drives that map to TaxDome client folders.
+    This means the agent can access client documents (W-2s, 1099s, organizers, etc.)
+    directly from the file system while working in Drake — no need to download
+    them through TaxDome's browser UI.
+
+    Virtual Drive Mapping:
+        The mapped drive (typically a network/virtual drive letter) syncs with
+        TaxDome's document storage. Each client has a folder structure with
+        their uploaded documents organized by type and tax year.
+
+Document Classification:
+    Supported document types for agent processing:
+    - W-2 (wages and salaries)
+    - 1099-INT (interest income)
+    - 1099-DIV (dividend income)
+    - 1099-NEC (self-employment/contractor income)
+    - 1099-R (retirement distributions)
+    - 1098 (mortgage interest, education credits)
+    - Organizers (client questionnaires)
+    - Bank statements (for reconciliation)
+    - ID documents (for verification)
+    - Prior returns (for carryovers and amendments)
+
 Dependencies: credential_manager.py, Firecrawl (browser automation)
 """
 
 import os
 from datetime import datetime, time
-from typing import Optional
+from typing import Optional, List
 
 from credential_manager import CredentialManager
 
@@ -40,8 +64,15 @@ class DrakeLifecycleManager:
         self.morning_open_time = time(7, 0)     # 7:00 AM CT
         self.evening_close_time = time(21, 0)   # 9:00 PM CT
 
+        # AWS WorkSpace virtual drive — maps to TaxDome client files
+        # The drive letter/path will be configured per environment
+        self.taxdome_drive_path = os.environ.get(
+            "TAXDOME_VIRTUAL_DRIVE", ""
+        )  # e.g., "T:\" or "/mnt/taxdome/"
+
         # State tracking
         self.is_drake_open = False
+        self.is_running = False
         self.session_start_time = None
         self.returns_processed_today = 0
 
@@ -282,11 +313,127 @@ class DrakeLifecycleManager:
             "message": "Password OK.",
         }
 
+    # ── Virtual Drive — TaxDome Client Files ─────────────────────
+
+    def get_client_documents(self, client_folder: str) -> List[dict]:
+        """
+        List available documents for a client from the TaxDome virtual drive.
+
+        The AWS WorkSpace has mapped drives that sync with TaxDome's
+        document storage. This allows the agent to access client files
+        (W-2s, 1099s, organizers, bank statements, etc.) directly from
+        the filesystem without needing TaxDome browser automation.
+
+        Args:
+            client_folder: Client folder name on the virtual drive
+
+        Returns:
+            List of document dicts:
+            [{"filename": "W-2_Employer.pdf", "path": "T:\ClientName\2025\W-2_Employer.pdf",
+              "type": "w2", "size_bytes": 12345, "modified": "2026-03-28"}]
+
+        SECURITY: Client documents are confidential (IRC §7216).
+        - NEVER log filenames containing client PII
+        - NEVER copy files outside the approved system boundary
+        - Documents are READ-ONLY from the agent's perspective
+        """
+        if not self.taxdome_drive_path:
+            return []
+
+        client_path = os.path.join(self.taxdome_drive_path, client_folder)
+        if not os.path.exists(client_path):
+            return []
+
+        documents = []
+        try:
+            for root, dirs, files in os.walk(client_path):
+                for filename in files:
+                    filepath = os.path.join(root, filename)
+                    stat = os.stat(filepath)
+                    doc_type = self._classify_document(filename)
+                    documents.append({
+                        "filename": filename,
+                        "path": filepath,
+                        "type": doc_type,
+                        "size_bytes": stat.st_size,
+                        "modified": datetime.fromtimestamp(
+                            stat.st_mtime
+                        ).strftime("%Y-%m-%d"),
+                    })
+        except PermissionError:
+            pass  # Drive may not be mounted or accessible
+
+        return documents
+
+    def _classify_document(self, filename: str) -> str:
+        """
+        Classify a document by its filename into a tax document type.
+
+        Returns: "w2", "1099", "1098", "organizer", "bank_statement",
+                 "id", "prior_return", "other"
+        """
+        name_lower = filename.lower()
+
+        if "w-2" in name_lower or "w2" in name_lower:
+            return "w2"
+        elif "1099" in name_lower:
+            # Sub-classify 1099s
+            if "int" in name_lower:
+                return "1099_int"
+            elif "div" in name_lower:
+                return "1099_div"
+            elif "nec" in name_lower or "misc" in name_lower:
+                return "1099_nec"
+            elif "r" in name_lower and "1099" in name_lower:
+                return "1099_r"
+            return "1099"
+        elif "1098" in name_lower:
+            return "1098"
+        elif "organizer" in name_lower:
+            return "organizer"
+        elif "bank" in name_lower or "statement" in name_lower:
+            return "bank_statement"
+        elif "license" in name_lower or "id" in name_lower or "passport" in name_lower:
+            return "id"
+        elif "prior" in name_lower or "return" in name_lower:
+            return "prior_return"
+        else:
+            return "other"
+
+    def check_virtual_drive(self) -> dict:
+        """
+        Check if the TaxDome virtual drive is accessible.
+
+        Returns:
+            {"available": bool, "path": str, "message": str}
+        """
+        if not self.taxdome_drive_path:
+            return {
+                "available": False,
+                "path": "",
+                "message": "TAXDOME_VIRTUAL_DRIVE not configured",
+            }
+
+        if os.path.exists(self.taxdome_drive_path):
+            return {
+                "available": True,
+                "path": self.taxdome_drive_path,
+                "message": "TaxDome virtual drive accessible",
+            }
+        else:
+            return {
+                "available": False,
+                "path": self.taxdome_drive_path,
+                "message": "TaxDome virtual drive not mounted or accessible",
+            }
+
     # ── Status ────────────────────────────────────────────────────
 
     def get_status(self) -> dict:
         """Get current Drake status for reporting."""
         pw_status = self.cred_manager.check_password_expiration(self.system_name)
+
+        drive_status = self.check_virtual_drive()
 
         return {
             "is_open": self.is_drake_open,
@@ -298,4 +445,5 @@ class DrakeLifecycleManager:
             "password_days_remaining": pw_status["days_remaining"],
             "password_warning": pw_status["warning_level"],
             "login_blocked": self.cred_manager.is_login_blocked(self.system_name),
+            "virtual_drive_available": drive_status["available"],
         }
