@@ -117,21 +117,41 @@ Set to `America/Chicago` in Settings > General
 - [x] Morning Report workflow imported (ID: FkPhsXWowDd0pna2)
 - [x] TaxDome Monitor workflow imported (ID: OgaHAAHFLRlpprAW)
 - [x] Anthropic billing/credits added
-- [x] GitHub PAT created ("cpaverse-n8n-agent") with repo scope
-- [x] GitHub repo created and files pushed
-- [ ] Gmail OAuth2 credential — **Josh needs to authorize** (click Create credential > Gmail OAuth2 > sign in)
-- [ ] Save GitHub PAT as Header Auth credential in n8n
-- [ ] Connect credentials to workflow nodes (select from dropdowns)
-- [ ] Replace `{GITHUB_OWNER}` in workflow nodes with CPAverse
-- [ ] Activate workflows and test
+- [x] Gmail OAuth2 credential created and connected
+- [x] GitHub PAT created (classic, repo scope, expires Apr 29 2026) and saved as Header Auth in n8n
+- [x] All credentials connected to workflow nodes
+- [x] `{GITHUB_OWNER}` replaced with `CPAverse` in all workflow nodes
+- [x] GitHub repo `CPAverse/cpaverse-agents` created and all files pushed
+- [x] Morning Report workflow tested — **full end-to-end execution successful**
+- [x] TaxDome Monitor workflow credentials connected and `{GITHUB_OWNER}` replaced
+- [ ] Activate Morning Report workflow for daily 7am CT schedule
+- [ ] Configure TaxDome webhook URL in TaxDome settings
+- [ ] Test TaxDome Monitor end-to-end
+
+### n8n Credentials Summary
+
+| Credential Name | Type | ID | Used By |
+|----------------|------|-----|---------|
+| Header Auth account | HTTP Header Auth (x-api-key) | z7OueMw6gYNXJ4zc | Claude API calls |
+| GitHub PAT — CPAverse | HTTP Header Auth (Authorization) | gJ6aC7oExkz14AQU | GitHub API calls |
+| Gmail account | Gmail OAuth2 | L83vlwXLATAfDYCt | Email sending |
+
+### Morning Report Workflow Nodes (Final Working Version)
+
+1. Daily 7am CT Trigger (Schedule)
+2. Read Activity Log from GitHub (HTTP Request → GitHub API)
+3. Build Claude Request (Code — constructs API request body)
+4. Claude API - Format Report (HTTP Request → Anthropic API)
+5. Parse Report (Code — extracts subject and HTML body)
+6. Send Morning Report Email (Gmail → josh@joshmauercpa.com)
 
 ## Testing Checklist
 
-- [ ] n8n timezone set to America/Chicago
-- [ ] GitHub repo `cpaverse-agents` exists with logs/daily-activity.md
-- [ ] Morning Report workflow imported and credentials connected
-- [ ] Morning Report test execution sends email successfully
-- [ ] TaxDome Monitor workflow imported and credentials connected
+- [x] GitHub repo `cpaverse-agents` exists with logs/daily-activity.md
+- [x] Morning Report workflow imported and credentials connected
+- [x] Morning Report test execution sends email successfully
+- [x] TaxDome Monitor workflow imported and credentials connected
+- [ ] n8n timezone verified as America/Chicago
 - [ ] TaxDome webhook URL configured in TaxDome settings
 - [ ] Test document upload triggers the monitor workflow
 - [ ] Urgent alert email sends correctly on Return Rejected test
