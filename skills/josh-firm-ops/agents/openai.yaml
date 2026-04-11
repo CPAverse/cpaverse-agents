@@ -1,0 +1,6 @@
+interface:
+  display_name: "Josh Firm Ops"
+  short_description: "Operational support for Josh Mauer CPA LLC without tax advice"
+  default_prompt: "Use the josh-firm-ops skill to handle procedural work, triage, Drake/TaxDome ops support, and client-process communication while strictly avoiding tax advice or state tax positions. Apply the three-label framework on every factual claim (I know / I am inferring / I do not know) — never present a guess as a fact. Invoke the stakes-based verification gate before any output that touches a regulator, a client commitment, a financial figure, a public-facing artifact, a credential, or a deadline."
+policy:
+  allow_implicit_invocation: true
