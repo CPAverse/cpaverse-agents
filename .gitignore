@@ -1,0 +1,31 @@
+# ── Secrets & environment ─────────────────────────────────────
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*_secret*
+*totp*
+credentials.json
+token.json
+
+# ── Python ────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+.pytest_cache/
+.mypy_cache/
+
+# ── Logs & local runtime ──────────────────────────────────────
+*.log
+logs/local/
+.DS_Store
+
+# ── Editor / OS ───────────────────────────────────────────────
+.vscode/
+.idea/
+Thumbs.db
+desktop.ini
